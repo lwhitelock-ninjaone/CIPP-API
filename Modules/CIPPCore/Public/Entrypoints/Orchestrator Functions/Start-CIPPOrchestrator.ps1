@@ -33,6 +33,85 @@ function Start-CIPPOrchestrator {
 
         [switch]$CallerIsQueueTrigger
     )
+
+    # ─── Craft runtime: push batch directly to OrchestratorService ───
+    if ($env:CIPPNG -eq 'true' -and $InputObject) {
+        $OrchestratorName = $InputObject.OrchestratorName ?? 'UnnamedOrchestrator'
+
+        # QueueFunction pattern: call the function first to generate batch items
+        if (-not $InputObject.Batch -and $InputObject.QueueFunction) {
+            $QueueFuncName = "Push-$($InputObject.QueueFunction.FunctionName)"
+            Write-Information "Craft: Calling QueueFunction '$QueueFuncName' to build batch for '$OrchestratorName'"
+            $QueueItem = [PSCustomObject]$InputObject.QueueFunction
+            $BatchResult = & $QueueFuncName -Item $QueueItem
+            $QueueBatch = @($BatchResult | Where-Object { $null -ne $_ })
+            if ($QueueBatch.Count -eq 0) {
+                Write-Information "Craft: QueueFunction '$QueueFuncName' returned 0 tasks for '$OrchestratorName' - skipping"
+                return "Craft-$OrchestratorName-NoTasks"
+            }
+            $InputObject | Add-Member -MemberType NoteProperty -Name 'Batch' -Value $QueueBatch -Force
+        }
+
+        # Include QueueId in RunName so the frontend can poll status by QueueId
+        $BatchQueueId = ($InputObject.Batch | Select-Object -First 1).QueueId
+        if ($BatchQueueId) {
+            $OrchestratorName = "$OrchestratorName-$BatchQueueId"
+        }
+
+        $PostExecFunctionName = $null
+        $PostExecParametersJson = $null
+        if ($InputObject.PostExecution) {
+            $PostExecFunctionName = $InputObject.PostExecution.FunctionName
+            if ($InputObject.PostExecution.Parameters) {
+                $PostExecParametersJson = $InputObject.PostExecution.Parameters | ConvertTo-Json -Depth 10 -Compress
+            }
+        }
+
+        # Write the batch as JSON Lines — one task per line — and hand Craft the path.
+        #
+        # This used to be a single `ConvertTo-Json @($InputObject.Batch)`, which put the entire
+        # fan-out in one string. That is what made per-task payloads so expensive: Set-CIPPDBCacheMailboxes
+        # notes it directly, because every permission batch carrying a copy of all mailboxes turned a
+        # 10k-mailbox tenant into 200 batches x 10k entries in ONE string. Narrowing what each batch
+        # carries reduced that, but the whole-batch-as-one-string shape was the reason it mattered.
+        # Serialising one task at a time means peak memory is one task, whether the run has 10 or 10,000
+        # — and Craft parses it back a line at a time for the same reason.
+        #
+        # Depth is per task now rather than per array, so tasks get one more level than before. That can
+        # only include detail that was previously truncated to a type name, never less.
+        $BatchPath = Join-Path ([System.IO.Path]::GetTempPath()) "cipp-batch-$([guid]::NewGuid().ToString('N')).jsonl"
+        $TaskCount = 0
+        try {
+            $Writer = [System.IO.StreamWriter]::new($BatchPath, $false, [System.Text.Encoding]::UTF8)
+            try {
+                foreach ($BatchItem in @($InputObject.Batch)) {
+                    if ($null -eq $BatchItem) { continue }
+                    $Writer.WriteLine((ConvertTo-Json -InputObject $BatchItem -Depth 10 -Compress))
+                    $TaskCount++
+                }
+            } finally {
+                $Writer.Dispose()
+            }
+        } catch {
+            # Queue nothing on a partial write — a half-written batch would start a run missing tasks,
+            # which looks like success. Drop the file and let the caller see the failure.
+            Remove-Item -LiteralPath $BatchPath -Force -ErrorAction SilentlyContinue
+            Write-Error "Failed to write batch file for '$OrchestratorName': $($_.Exception.Message)"
+            throw
+        }
+
+        Write-Information "Craft: Queuing orchestrator '$OrchestratorName' ($TaskCount tasks$(if ($PostExecFunctionName) { ", PostExec: $PostExecFunctionName" }))"
+        [Craft.Services.OrchestratorBridge]::QueueOrchestrationFromFile(
+            $OrchestratorName,
+            $BatchPath,
+            4,
+            $PostExecFunctionName,
+            $PostExecParametersJson,
+            $InputObject.Reference
+        )
+        return "Craft-$OrchestratorName"
+    }
+
     $OrchestratorTable = Get-CippTable -TableName 'CippOrchestratorInput'
     $BatchTable = Get-CippTable -TableName 'CippOrchestratorBatch'
 
@@ -99,7 +178,7 @@ function Start-CIPPOrchestrator {
             # Clean up the stored input object after starting the orchestration
             try {
                 $Entities = Get-AzDataTableEntity @OrchestratorTable -Filter "PartitionKey eq 'Input' and (RowKey eq '$InputObjectGuid' or OriginalEntityId eq '$InputObjectGuid' or OriginalEntityId eq guid'$InputObjectGuid')" -Property PartitionKey, RowKey
-                Remove-AzDataTableEntity @OrchestratorTable -Entity $Entities -Force
+                Remove-CIPPAzDataTableEntity @OrchestratorTable -Entity $Entities -Force
                 Write-Information "Cleaned up stored input object: $InputObjectGuid"
             } catch {
                 Write-Warning "Failed to clean up stored input object $InputObjectGuid : $_"
