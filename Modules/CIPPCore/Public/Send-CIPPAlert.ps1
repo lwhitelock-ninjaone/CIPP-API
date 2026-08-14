@@ -15,6 +15,8 @@ function Send-CIPPAlert {
         $Headers,
         $TableName,
         $RowKey = [string][guid]::NewGuid(),
+        $Attachments,
+        $AffectedUser,
         [switch]$UseStandardizedSchema
     )
     Write-Information 'Shipping Alert'
@@ -58,6 +60,18 @@ function Send-CIPPAlert {
                         toRecipients = @($Recipients)
                     }
                     saveToSentItems = 'true'
+                }
+
+                # Add file attachments if provided
+                if ($Attachments -and $Attachments.Count -gt 0) {
+                    $PowerShellBody.message.attachments = @($Attachments | ForEach-Object {
+                        @{
+                            '@odata.type'  = '#microsoft.graph.fileAttachment'
+                            name           = $_.Name
+                            contentType    = $_.ContentType
+                            contentBytes   = $_.ContentBytes
+                        }
+                    })
                 }
 
                 $JSONBody = ConvertTo-Json -Compress -Depth 10 -InputObject $PowerShellBody
@@ -114,7 +128,7 @@ function Send-CIPPAlert {
                 return (Get-CIPPAzDataTableEntity @DevSecretsTable -Filter "PartitionKey eq '$SecretName' and RowKey eq '$SecretName'").APIKey
             }
 
-            $KeyVaultName = ($env:WEBSITE_DEPLOYMENT_ID -split '-')[0]
+            $KeyVaultName = Get-CippKeyVaultName
             return (Get-CippKeyVaultSecret -VaultName $KeyVaultName -Name $SecretName -AsPlainText)
         }
 
@@ -242,31 +256,31 @@ function Send-CIPPAlert {
                         '*webhook.office.com*' {
                             if ($UseStandardizedWebhookSchema) {
                                 $RestMethod['Body'] = $ReplacedContent
-                                $WebhookResponse = Invoke-RestMethod @RestMethod
+                                $WebhookResponse = Invoke-CIPPRestMethod @RestMethod
                             } else {
                                 $TeamsBody = [PSCustomObject]@{
                                     text = "You've setup your alert policies to be alerted whenever specific events happen. We've found some of these events in the log. <br><br>$ReplacedContent"
                                 } | ConvertTo-Json -Compress
                                 $RestMethod['Body'] = $TeamsBody
-                                $WebhookResponse = Invoke-RestMethod @RestMethod
+                                $WebhookResponse = Invoke-CIPPRestMethod @RestMethod
                             }
                         }
                         '*discord.com*' {
                             if ($UseStandardizedWebhookSchema) {
                                 $RestMethod['Body'] = $ReplacedContent
-                                $WebhookResponse = Invoke-RestMethod @RestMethod
+                                $WebhookResponse = Invoke-CIPPRestMethod @RestMethod
                             } else {
                                 $DiscordBody = [PSCustomObject]@{
                                     content = "You've setup your alert policies to be alerted whenever specific events happen. We've found some of these events in the log. ``````$ReplacedContent``````"
                                 } | ConvertTo-Json -Compress
                                 $RestMethod['Body'] = $DiscordBody
-                                $WebhookResponse = Invoke-RestMethod @RestMethod
+                                $WebhookResponse = Invoke-CIPPRestMethod @RestMethod
                             }
                         }
                         '*slack.com*' {
                             if ($UseStandardizedWebhookSchema) {
                                 $RestMethod['Body'] = $ReplacedContent
-                                $WebhookResponse = Invoke-RestMethod @RestMethod
+                                $WebhookResponse = Invoke-CIPPRestMethod @RestMethod
                             } else {
                                 $SlackBlocks = Get-SlackAlertBlocks -JSONBody $JSONContent
                                 if ($SlackBlocks.blocks) {
@@ -277,12 +291,12 @@ function Send-CIPPAlert {
                                     } | ConvertTo-Json -Compress
                                 }
                                 $RestMethod['Body'] = $SlackBody
-                                $WebhookResponse = Invoke-RestMethod @RestMethod
+                                $WebhookResponse = Invoke-CIPPRestMethod @RestMethod
                             }
                         }
                         default {
                             $RestMethod['Body'] = $ReplacedContent
-                            $WebhookResponse = Invoke-RestMethod @RestMethod
+                            $WebhookResponse = Invoke-CIPPRestMethod @RestMethod
                         }
                     }
                 }
@@ -313,21 +327,36 @@ function Send-CIPPAlert {
 
     if ($Type -eq 'psa') {
         Write-Information 'Trying to send to PSA'
-        if ($config.sendtoIntegration) {
-            if ($PSCmdlet.ShouldProcess('PSA', 'Sending alert')) {
-                try {
-                    $Alert = @{
-                        TenantId   = $TenantFilter
-                        AlertText  = "$HTMLContent"
-                        AlertTitle = "$($Title)"
-                    }
-                    New-CippExtAlert -Alert $Alert
-                    Write-LogMessage -API 'Webhook Alerts' -tenant $TenantFilter -message "Sent PSA alert $title" -sev info
-                } catch {
-                    $ErrorMessage = Get-CippException -Exception $_
-                    Write-Information "Could not send alerts to ticketing system: $($ErrorMessage.NormalizedError)"
-                    Write-LogMessage -API 'Webhook Alerts' -tenant $TenantFilter -message "Could not send alerts to ticketing system: $($ErrorMessage.NormalizedError)" -sev Error -LogData $ErrorMessage
+        if (-not $config.sendtoIntegration) {
+            Write-Information 'PSA delivery skipped: sendtoIntegration is disabled in CippNotifications config. Enable it under Settings -> Notifications to route alerts to your PSA.'
+            return
+        }
+        if ($PSCmdlet.ShouldProcess('PSA', 'Sending alert')) {
+            try {
+                # Tag every CIPP-generated PSA ticket title with a "[CIPP]" prefix so technicians
+                # can filter, group and search for them in HaloPSA's ticket views with one query.
+                # The prefix is only added on the PSA path - email and webhook subjects keep the
+                # untouched title to preserve existing recipient inbox rules.
+                $PsaTitle = if ($Title -match '^\[CIPP\]\s') { "$Title" } else { "[CIPP] $Title" }
+                $Alert = @{
+                    TenantId   = $TenantFilter
+                    AlertText  = "$HTMLContent"
+                    AlertTitle = "$PsaTitle"
                 }
+                if ($AffectedUser) {
+                    $Alert.AffectedUser = $AffectedUser
+                    $UserLabel = if ($AffectedUser.UPN) { $AffectedUser.UPN } elseif ($AffectedUser.AzureOID) { "OID:$($AffectedUser.AzureOID)" } else { 'unknown' }
+                    Write-Information "PSA alert AffectedUser: $UserLabel"
+                }
+                $PsaResult = New-CippExtAlert -Alert $Alert
+                if ($PsaResult) {
+                    Write-Information "PSA result: $PsaResult"
+                }
+                Write-LogMessage -API 'Webhook Alerts' -tenant $TenantFilter -message "Sent PSA alert $title" -sev info
+            } catch {
+                $ErrorMessage = Get-CippException -Exception $_
+                Write-Information "Could not send alerts to ticketing system: $($ErrorMessage.NormalizedError)"
+                Write-LogMessage -API 'Webhook Alerts' -tenant $TenantFilter -message "Could not send alerts to ticketing system: $($ErrorMessage.NormalizedError)" -sev Error -LogData $ErrorMessage
             }
         }
     }
