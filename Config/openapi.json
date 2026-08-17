@@ -620,6 +620,12 @@
                   "DisplayName": {
                     "type": "string"
                   },
+                  "GroupIds": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LabelValue"
+                    }
+                  },
                   "selectedTenants": {
                     "$ref": "#/components/schemas/LabelValue"
                   }
@@ -764,7 +770,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.ReadWrite",
+        "x-cipp-role": "Tenant.Baselines.ReadWrite",
         "x-cipp-reads-via": [
           "New-CIPPBaseline"
         ]
@@ -4670,10 +4676,20 @@
                     }
                   },
                   "TemplateGuid": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "The deploy drawer and wizard send the chosen row's GUID as TemplateList.value, not as TemplateID. Template display names are not unique - re-imports create same-named twins - so resolving by display name below can land on a different row than the one the user picked. The selected RowKey must win whenever the request carries one. String rather than Guid: built-in templates are stored with their filename as RowKey."
                   },
                   "TemplateID": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "The deploy drawer and wizard send the chosen row's GUID as TemplateList.value, not as TemplateID. Template display names are not unique - re-imports create same-named twins - so resolving by display name below can land on a different row than the one the user picked. The selected RowKey must win whenever the request carries one. String rather than Guid: built-in templates are stored with their filename as RowKey."
+                  },
+                  "TemplateList": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/LabelValue"
+                      }
+                    ],
+                    "description": "The deploy drawer and wizard send the chosen row's GUID as TemplateList.value, not as TemplateID. Template display names are not unique - re-imports create same-named twins - so resolving by display name below can land on a different row than the one the user picked. The selected RowKey must win whenever the request carries one. String rather than Guid: built-in templates are stored with their filename as RowKey."
                   },
                   "TemplateType": {
                     "type": "string"
@@ -13567,6 +13583,77 @@
         "x-cipp-role": "Endpoint.Application.ReadWrite"
       }
     },
+    "/api/ExecAssignAutopilotProfile": {
+      "post": {
+        "summary": "ExecAssignAutopilotProfile",
+        "operationId": "ExecAssignAutopilotProfile",
+        "tags": [
+          "Endpoint > Autopilot"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "AssignTo": {
+                    "type": "string"
+                  },
+                  "GroupIds": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LabelValue"
+                    }
+                  },
+                  "ProfileId": {
+                    "type": "string"
+                  },
+                  "ProfileName": {
+                    "type": "string"
+                  },
+                  "tenantFilter": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "AssignTo",
+                  "ProfileId",
+                  "tenantFilter"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResults"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing bearer token"
+          },
+          "403": {
+            "description": "Forbidden - caller lacks the required RBAC role"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-cipp-role": "Endpoint.Autopilot.ReadWrite"
+      }
+    },
     "/api/ExecAssignmentFilter": {
       "post": {
         "summary": "ExecAssignmentFilter",
@@ -14376,7 +14463,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.ReadWrite"
+        "x-cipp-role": "Tenant.Baselines.ReadWrite"
       }
     },
     "/api/ExecBaselineRun": {
@@ -14451,7 +14538,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.ReadWrite"
+        "x-cipp-role": "Tenant.BaselinesRun.ReadWrite"
       }
     },
     "/api/ExecBaselineStage": {
@@ -14515,7 +14602,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.ReadWrite"
+        "x-cipp-role": "Tenant.Baselines.ReadWrite"
       }
     },
     "/api/ExecBECCheck": {
@@ -16317,7 +16404,8 @@
                     "type": "boolean"
                   },
                   "FullName": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Pretty-printed, not compressed: repo files are hand-edited on GitHub."
                   },
                   "GUID": {
                     "type": "string",
@@ -16327,7 +16415,8 @@
                     "type": "string"
                   },
                   "Message": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Pretty-printed, not compressed: repo files are hand-edited on GitHub."
                   },
                   "Path": {
                     "type": "string"
@@ -17716,6 +17805,17 @@
                   },
                   "NewRoleName": {
                     "type": "string"
+                  },
+                  "PermissionRules": {
+                    "type": "object",
+                    "properties": {
+                      "Exclude": {
+                        "type": "string"
+                      },
+                      "Include": {
+                        "type": "string"
+                      }
+                    }
                   },
                   "Permissions": {
                     "type": "string"
@@ -33216,6 +33316,207 @@
         "x-cipp-any-tenant": true
       }
     },
+    "/api/ExecSiteBrowserActions": {
+      "post": {
+        "summary": "ExecSiteBrowserActions",
+        "operationId": "ExecSiteBrowserActions",
+        "tags": [
+          "Teams-Sharepoint"
+        ],
+        "description": "Mutating / operational actions for the SharePoint site browser (non-permissions).\nBody.Action selects the operation. SiteUrl + tenantFilter are always required.\nVersion cleanup: StartVersionCleanup, GetVersionCleanupStatus.\nSite admin properties (incl. version policy): GetSiteProperties.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "Action": {
+                    "type": "string"
+                  },
+                  "BatchDeleteMode": {
+                    "$ref": "#/components/schemas/LabelValueNumber"
+                  },
+                  "DeleteOlderThanDays": {
+                    "type": "string"
+                  },
+                  "MajorVersionLimit": {
+                    "type": "string"
+                  },
+                  "MajorWithMinorVersionsLimit": {
+                    "type": "string"
+                  },
+                  "SiteId": {
+                    "type": "string"
+                  },
+                  "SiteUrl": {
+                    "type": "string"
+                  },
+                  "SyncListPolicy": {
+                    "type": "boolean"
+                  },
+                  "tenantFilter": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "Action",
+                  "tenantFilter"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResults"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing required field or invalid input"
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing bearer token"
+          },
+          "403": {
+            "description": "Forbidden - caller lacks the required RBAC role"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-cipp-role": "Sharepoint.Site.ReadWrite"
+      }
+    },
+    "/api/ExecSiteBrowserPermissions": {
+      "post": {
+        "summary": "ExecSiteBrowserPermissions",
+        "operationId": "ExecSiteBrowserPermissions",
+        "tags": [
+          "Teams-Sharepoint"
+        ],
+        "description": "Mutating actions for the SharePoint site browser permissions dialog.\nBody.Action selects the operation. SiteUrl + tenantFilter are always required.\nListId scopes library actions; omit it for the site root web.\nSharing links / Graph drive permissions are out of scope.\nGraph site permissions (Sites.Selected app grants): RemoveGraphSitePermission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "Action": {
+                    "type": "string"
+                  },
+                  "ClearSubscopes": {
+                    "type": "boolean"
+                  },
+                  "CopyRoleAssignments": {
+                    "type": "string"
+                  },
+                  "GroupId": {
+                    "type": "string"
+                  },
+                  "GroupName": {
+                    "type": "string"
+                  },
+                  "Groups": {
+                    "type": "string"
+                  },
+                  "LibraryName": {
+                    "type": "string"
+                  },
+                  "ListId": {
+                    "type": "string"
+                  },
+                  "PermissionId": {
+                    "type": "string"
+                  },
+                  "PermissionLevel": {
+                    "$ref": "#/components/schemas/LabelValue"
+                  },
+                  "PrincipalId": {
+                    "type": "string"
+                  },
+                  "PrincipalName": {
+                    "type": "string",
+                    "description": "Allow a single login/UPN from a selected admin row."
+                  },
+                  "RoleDefinitionId": {
+                    "$ref": "#/components/schemas/LabelValue"
+                  },
+                  "SiteId": {
+                    "type": "string"
+                  },
+                  "SiteUrl": {
+                    "type": "string"
+                  },
+                  "tenantFilter": {
+                    "type": "string"
+                  },
+                  "Title": {
+                    "type": "string"
+                  },
+                  "userPrincipalName": {
+                    "type": "string",
+                    "description": "Allow a single login/UPN from a selected admin row."
+                  },
+                  "Users": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "Action",
+                  "GroupId",
+                  "ListId",
+                  "PermissionId",
+                  "PrincipalId",
+                  "SiteId",
+                  "SiteUrl",
+                  "tenantFilter"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResults"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing required field or invalid input"
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing bearer token"
+          },
+          "403": {
+            "description": "Forbidden - caller lacks the required RBAC role"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-cipp-role": "Sharepoint.Site.ReadWrite",
+        "x-cipp-reads-via": [
+          "Resolve-BrowserPermissionRoleDefId"
+        ]
+      }
+    },
     "/api/ExecSnoozeAlert": {
       "post": {
         "summary": "ExecSnoozeAlert",
@@ -34595,7 +34896,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.ReadWrite"
+        "x-cipp-role": "Tenant.BaselinesDeviations.ReadWrite"
       }
     },
     "/api/ExecUpdateDriftDeviation": {
@@ -35128,7 +35429,7 @@
         "tags": [
           "CIPP > Core"
         ],
-        "description": "Compares the caller's reported CIPP version against the latest published release and reports whether the frontend or the API is out of date.",
+        "description": "Compares the caller's reported CIPP version against the latest published release and reports whether the frontend or the API is out of date, alongside the hosting shape (hosting type, App Service SKU, runtime stack) and the recorded version-update history.",
         "parameters": [
           {
             "name": "LocalVersion",
@@ -35146,7 +35447,27 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Not described statically: this endpoint returns the upstream response as-is, so its fields are determined by the upstream API rather than by CIPP. Call the endpoint to see the actual shape, or add a response schema in backend/Config/openapi-overrides."
+                  "description": "Derived from the fields the endpoint selects onto each record. The response may carry more; these are the ones known to exist.",
+                  "properties": {
+                    "LocalCIPPAPIVersion": {
+                      "x-cipp-field-source": "backend"
+                    },
+                    "LocalCIPPVersion": {
+                      "x-cipp-field-source": "backend"
+                    },
+                    "OutOfDateCIPP": {
+                      "x-cipp-field-source": "backend"
+                    },
+                    "OutOfDateCIPPAPI": {
+                      "x-cipp-field-source": "backend"
+                    },
+                    "RemoteCIPPAPIVersion": {
+                      "x-cipp-field-source": "backend"
+                    },
+                    "RemoteCIPPVersion": {
+                      "x-cipp-field-source": "backend"
+                    }
+                  }
                 }
               }
             }
@@ -37435,22 +37756,34 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "description": "Derived from the fields the endpoint selects onto each record. The response may carry more; these are the ones known to exist.",
+                    "description": "Derived from the fields written into the storage table it reads, and the fields the endpoint selects onto each record. Fields taken from the storage writers may be omitted by this endpoint, and the response may carry computed fields not listed here.",
                     "properties": {
                       "Data": {
-                        "x-cipp-field-source": "backend"
+                        "type": "string",
+                        "x-cipp-field-source": "storage,backend"
+                      },
+                      "ETag": {
+                        "type": "string",
+                        "x-cipp-field-source": "storage"
                       },
                       "LogId": {
                         "x-cipp-field-source": "backend"
                       },
+                      "PartitionKey": {
+                        "x-cipp-field-source": "storage"
+                      },
+                      "RowKey": {
+                        "x-cipp-field-source": "storage"
+                      },
                       "Tenant": {
-                        "x-cipp-field-source": "backend"
+                        "x-cipp-field-source": "storage,backend"
                       },
                       "Timestamp": {
-                        "x-cipp-field-source": "backend"
+                        "type": "string",
+                        "x-cipp-field-source": "storage,backend"
                       },
                       "Title": {
-                        "x-cipp-field-source": "backend"
+                        "x-cipp-field-source": "storage,backend"
                       }
                     }
                   }
@@ -37985,7 +38318,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.Read"
+        "x-cipp-role": "Tenant.Baselines.Read"
       }
     },
     "/api/ListBaselines": {
@@ -38052,7 +38385,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.Read"
+        "x-cipp-role": "Tenant.Baselines.Read"
       }
     },
     "/api/ListBaselineStandards": {
@@ -38093,7 +38426,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.Read"
+        "x-cipp-role": "Tenant.Baselines.Read"
       }
     },
     "/api/ListBasicAuth": {
@@ -38914,6 +39247,86 @@
           }
         ],
         "x-cipp-role": "CIPP.Core.Read"
+      }
+    },
+    "/api/ListCippDocs": {
+      "get": {
+        "summary": "Search the CIPP documentation, or fetch one documentation page in full.",
+        "operationId": "ListCippDocs",
+        "tags": [
+          "CIPP > Core"
+        ],
+        "description": "Searches the GitBook documentation shipped with this build and returns matching sections,\neach with an excerpt and links back to docs.cipp.app and to the file on GitHub. Pages under\nuser-documentation also report the CIPP route they document, so a screen can be traced to\nits docs and back.\n\nPass path on its own to list the pages under a documentation subtree or a CIPP route, or\nwith full=true to return one page's entire text. This backs the SearchDocs and GetDoc MCP\ntools and is available to the UI and API clients on the same terms.",
+        "parameters": [
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return the whole page rather than matching sections. Requires path.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results to return (default 8, max 25).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "A documentation subtree ('user-documentation/identity') or a CIPP route ('/identity/administration/users').",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Keywords or a plain-language question, e.g. 'how do I set up GDAP'.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "description": "Not described statically: this endpoint returns the upstream response as-is, so its fields are determined by the upstream API rather than by CIPP. Call the endpoint to see the actual shape, or add a response schema in backend/Config/openapi-overrides."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing bearer token"
+          },
+          "403": {
+            "description": "Forbidden - caller lacks the required RBAC role"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-cipp-role": "CIPP.Core.Read",
+        "x-cipp-any-tenant": true
       }
     },
     "/api/ListCippQueue": {
@@ -45759,6 +46172,9 @@
                       "lastSignInDateTime": {
                         "x-cipp-field-source": "frontend"
                       },
+                      "lastSuccessfulSignInDateTime": {
+                        "x-cipp-field-source": "frontend"
+                      },
                       "numberOfAssignedLicenses": {
                         "x-cipp-field-source": "frontend"
                       },
@@ -46309,21 +46725,24 @@
                     "type": "object",
                     "description": "Derived from the fields written into the storage table it reads, and the fields the endpoint selects onto each record, and the columns the CIPP UI renders. Fields taken from the storage writers may be omitted by this endpoint, and the response may carry computed fields not listed here.",
                     "properties": {
+                      "corrupt": {
+                        "x-cipp-field-source": "backend"
+                      },
                       "description": {
-                        "x-cipp-field-source": "frontend"
+                        "x-cipp-field-source": "backend,frontend"
                       },
                       "displayName": {
-                        "x-cipp-field-source": "frontend"
+                        "x-cipp-field-source": "backend,frontend"
                       },
                       "ETag": {
                         "type": "string",
                         "x-cipp-field-source": "storage"
                       },
                       "guid": {
-                        "x-cipp-field-source": "storage"
+                        "x-cipp-field-source": "storage,backend"
                       },
                       "isSynced": {
-                        "x-cipp-field-source": "frontend"
+                        "x-cipp-field-source": "backend,frontend"
                       },
                       "JSON": {
                         "x-cipp-field-source": "storage"
@@ -46332,7 +46751,7 @@
                         "x-cipp-field-source": "backend"
                       },
                       "package": {
-                        "x-cipp-field-source": "storage,frontend"
+                        "x-cipp-field-source": "storage,backend,frontend"
                       },
                       "PartitionKey": {
                         "x-cipp-field-source": "storage"
@@ -46348,7 +46767,7 @@
                         "x-cipp-field-source": "storage"
                       },
                       "source": {
-                        "x-cipp-field-source": "storage"
+                        "x-cipp-field-source": "storage,backend"
                       },
                       "templateCount": {
                         "x-cipp-field-source": "backend"
@@ -49142,6 +49561,48 @@
           }
         ],
         "x-cipp-role": "Tenant.Relationship.Read"
+      }
+    },
+    "/api/ListPartnerTenantInfo": {
+      "get": {
+        "summary": "ListPartnerTenantInfo",
+        "operationId": "ListPartnerTenantInfo",
+        "tags": [
+          "CIPP > Core"
+        ],
+        "description": "Reports whether the CIPP host tenant is a Microsoft Partner tenant, so the frontend can\ndecide whether partner-only flows (GDAP onboarding, reseller invites, GDAP permission\nchecks) apply to this instance.\n\nMarked AnyTenant deliberately. This answers a question about the CIPP instance, not\nabout a tenant the caller wants to act on, and Get-CippPartnerTenantInfo pins the lookup\nto $env:TenantID. Without the flag, Test-CIPPAccess falls back to $env:TenantID as the\ntenant filter and denies any custom role that blocks the partner tenant, which silently\ngreys out partner-only UI for roles that are otherwise fully permitted.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "description": "Not described statically: this endpoint returns the upstream response as-is, so its fields are determined by the upstream API rather than by CIPP. Call the endpoint to see the actual shape, or add a response schema in backend/Config/openapi-overrides."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing bearer token"
+          },
+          "403": {
+            "description": "Forbidden - caller lacks the required RBAC role"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-cipp-role": "CIPP.Core.Read",
+        "x-cipp-any-tenant": true
       }
     },
     "/api/ListPendingWebhooks": {
@@ -52985,6 +53446,134 @@
           },
           "500": {
             "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-cipp-role": "Sharepoint.Site.Read"
+      }
+    },
+    "/api/ListSiteBrowser": {
+      "get": {
+        "summary": "ListSiteBrowser",
+        "operationId": "ListSiteBrowser",
+        "tags": [
+          "Teams-Sharepoint"
+        ],
+        "description": "SharePoint site browser listing (sites only — not OneDrive).\nRoot: Get-CIPPSPOAdminListData (SPO.Tenant/RenderAdminListData, Active sites catalog) —\nStorageUsed / NumOfFiles / TemplateName in one paged call.\nGraph getAllSites joins only for Graph site.id (drill-in).\nWith SiteId/SiteUrl: root document/page libraries (Graph lists + SPO StorageMetrics).",
+        "parameters": [
+          {
+            "name": "SiteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SiteUrl",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/tenantFilter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "description": "Not described statically: this endpoint returns the upstream response as-is, so its fields are determined by the upstream API rather than by CIPP. Call the endpoint to see the actual shape, or add a response schema in backend/Config/openapi-overrides."
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing required field or invalid input"
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing bearer token"
+          },
+          "403": {
+            "description": "Forbidden - caller lacks the required RBAC role"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-cipp-role": "Sharepoint.Site.Read"
+      }
+    },
+    "/api/ListSiteBrowserPermissions": {
+      "get": {
+        "summary": "ListSiteBrowserPermissions",
+        "operationId": "ListSiteBrowserPermissions",
+        "tags": [
+          "Teams-Sharepoint"
+        ],
+        "description": "Extensive permission inventory for a SharePoint site or library for the site browser.\nCollects SPO site admins, associated Owners/Members/Visitors (with members), all site\ngroups (with members), web/library role assignments, and Graph site permissions\n(Sites.Selected / app-only grants). Partial failures are returned in Errors so the UI\ncan still show what was collected. SiteUrl is required; ListId targets a library.\nSharing links / Graph drive permissions are intentionally out of scope (handled elsewhere).",
+        "parameters": [
+          {
+            "name": "ListId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SiteId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SiteUrl",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/tenantFilter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResults"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing required field or invalid input"
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing bearer token"
+          },
+          "403": {
+            "description": "Forbidden - caller lacks the required RBAC role"
           }
         },
         "security": [
@@ -58910,7 +59499,7 @@
             "bearerAuth": []
           }
         ],
-        "x-cipp-role": "Tenant.Standards.ReadWrite"
+        "x-cipp-role": "Tenant.Baselines.ReadWrite"
       }
     },
     "/api/RemoveBPATemplate": {
